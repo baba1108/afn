@@ -1,0 +1,158 @@
+update PRODUCTS
+ set SUPPLIER_NUMBER= 1 
+where PRODUCT_REF in ( select PRODUCT_REF
+from PRODUCTS 
+where CATEGORY_CODE in (select CATEGORY_CODE
+                        from CATEGORIES 
+                        where upper(CATEGORY_NAME)='BOISSONS'));
+
+
+SELECT 
+    EMPLOYEE_NUMBER AS `Numéro d’employé`,
+    LPAD(first_name, 20, ' ') AS `Prénom`,
+    LPAD(last_name, 20, ' ') AS `Nom`,
+    TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) AS `Âge`,
+    TIMESTAMPDIFF(YEAR, hire_date, CURDATE()) AS `Ancienneté`
+FROM employees
+WHERE TITLE = 'Mr'
+AND (salary + commission) >= 8000
+ORDER BY `Ancienneté` DESC;
+
+
+
+
+SELECT 
+    PRODUCT_REF AS `Numéro de produit`,
+    product_name AS `Nom du produit`,
+    supplier_NUMBER AS `Numéro de fournisseur`,
+    units_on_order AS `Unités commandées`,
+    unit_price AS `Prix unitaire`
+FROM products
+WHERE 
+    -- Critère C1 : La quantité est emballée dans une ou plusieurs bouteilles
+    QUANTITY LIKE '%bottle%' OR  QUANTITY  LIKE '%bottles%'
+    -- Critère C2 : Le troisième caractère du nom du produit est 't' ou 'T'
+    AND SUBSTRING(PRODUCT_REF, 3, 1) IN ('t', 'T')
+    -- Critère C3 : Fournis par les fournisseurs 1, 2 ou 3
+    AND SUPPLIER_NUMBER IN (1, 2, 3)
+    -- Critère C4 : Les prix unitaires varient entre 70 et 200
+    AND unit_price BETWEEN 70 AND 200
+    -- Critère C5 : Les unités commandées sont spécifiées (non null)
+    AND units_on_order IS NOT NULL;
+
+
+
+SELECT *
+FROM customers
+WHERE country = (
+    SELECT country
+    FROM suppliers
+    WHERE SUPPLIER_NUMBER = 1
+)
+AND city = (
+    SELECT city
+    FROM suppliers
+    WHERE SUPPLIER_NUMBER = 1
+)
+AND RIGHT(postal_code, 3) = (
+    SELECT RIGHT(postal_code, 3)
+    FROM suppliers
+    WHERE SUPPLIER_NUMBER = 1
+);
+
+
+
+SELECT 
+    order_number AS `Numéro de commande`,
+    CASE
+        WHEN (SHIPPING_COST ) BETWEEN 0 AND 2000 THEN 0
+        WHEN (SHIPPING_COST ) BETWEEN 2001 AND 10000 THEN 5
+        WHEN (SHIPPING_COST ) BETWEEN 10001 AND 40000 THEN 10
+        WHEN (SHIPPING_COST ) BETWEEN 40001 AND 80000 THEN 15
+        ELSE 20
+    END AS `Nouveau taux de remise`,
+    CASE
+        WHEN order_number BETWEEN 10000 AND 10999 THEN 'Appliquer l’ancien taux de remise'
+        ELSE 'Appliquer le nouveau taux de remise'
+    END AS `Note d’application du taux de remise`
+FROM orders
+WHERE order_number BETWEEN 10998 AND 11003;
+
+
+
+USE commerce;
+
+
+SELECT DISTINCT
+    s.SUPPLIER_NUMBER AS `Numéro de fournisseur`,
+    s.company AS `Société`,
+    s.address AS `Adresse`,
+    s.phone AS `Numéro de téléphone`
+FROM suppliers s
+JOIN products p ON s.SUPPLIER_NUMBER = p.SUPPLIER_NUMBER
+WHERE p.product_name = 'Boissons';
+
+
+SELECT DISTINCT
+    c.customer_code AS `Code client`
+FROM customers c
+JOIN orders o ON c.customer_code = o.customer_code
+JOIN order_details od ON o.order_number = od.order_number
+JOIN products p ON od.product_ref = p.product_ref
+WHERE c.city = 'Berlin'
+AND p.product_name = 'Dessert'
+GROUP BY c.customer_code
+HAVING COUNT(od.product_ref) <= 1;
+
+
+
+
+SELECT 
+    c.customer_code AS `Numéro de client`,
+    c.company AS `Nom de l’entreprise`,
+    c.phone AS `Numéro de téléphone`,
+    COALESCE(SUM(od.quantity * p.unit_price), 0) AS `Montant total`,
+    c.country AS `Pays`
+FROM customers c
+LEFT JOIN orders o ON c.customer_code = o.customer_code
+LEFT JOIN order_details od ON o.order_number = od.order_number
+LEFT JOIN products p ON od.product_ref = p.product_ref
+WHERE c.country = 'France'
+AND (o.order_date IS NULL 
+    OR (YEAR(o.order_date) = 1998 
+    AND MONTH(o.order_date) = 4 
+    AND DAYOFWEEK(o.order_date) = 2))
+GROUP BY c.customer_code, c.company, c.phone, c.country;
+
+
+
+SELECT 
+    c.customer_code AS `Code client`,
+    c.company AS `Nom de l’entreprise`,
+    c.phone AS `Numéro de téléphone`
+FROM customers c
+JOIN orders o ON c.customer_code = o.customer_code
+JOIN order_details od ON o.order_number = od.order_number
+JOIN products p ON od.product_ref = p.product_ref
+GROUP BY c.customer_code, c.company, c.phone
+HAVING COUNT(DISTINCT p.product_ref) = (SELECT COUNT(*) FROM products);
+
+
+
+
+SELECT 
+    c.customer_code AS `Code client`,
+    COUNT(o.order_number) AS `Nombre de commandes`
+FROM customers c
+JOIN orders o ON c.customer_code = o.customer_code
+WHERE c.country = 'France'
+GROUP BY c.customer_code;
+
+
+
+SELECT 
+    COUNT(CASE WHEN YEAR(order_date) = 1996 THEN 1 END) AS `Commandes en 1996`,
+    COUNT(CASE WHEN YEAR(order_date) = 1997 THEN 1 END) AS `Commandes en 1997`,
+    COUNT(CASE WHEN YEAR(order_date) = 1997 THEN 1 END) - COUNT(CASE WHEN YEAR(order_date) = 1996 THEN 1 END) AS `Différence`
+FROM orders
+WHERE YEAR(order_date) IN (1996, 
